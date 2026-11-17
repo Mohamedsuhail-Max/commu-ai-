@@ -1,6 +1,6 @@
 import { createPracticeSession } from './practiceService.js';
 
-export const evaluateInterviewAnswer = ({ question, answer, role = 'General', category = 'Behavioral' }) => {
+export const evaluateInterviewAnswer = async (userId, { question, answer, role = 'General', category = 'Behavioral' }) => {
   const words = answer.trim().split(/\s+/).filter(Boolean);
   const wordCount = words.length;
 
@@ -52,14 +52,15 @@ export const evaluateInterviewAnswer = ({ question, answer, role = 'General', ca
       "In my recent project, our engineering team encountered a conflict regarding whether to rebuild an internal service or refactor the existing code. I organized an objective benchmark spike assessing developer velocity against production risk. By quantifying a 35% performance gain, we aligned the stakeholders and delivered the upgrade ahead of schedule.",
   };
 
-  // Automatically record this session in history
-  createPracticeSession({
+  // Automatically record this session in history linked to the user
+  await createPracticeSession(userId, {
     topic: `Interview: ${category}`,
     type: 'Interview',
     durationMinutes: 10,
     score: overallScore,
     mistakesLogged: overallScore < 80 ? 2 : 1,
-  });
+    metadata: feedback,
+  }).catch(() => {});
 
   return feedback;
 };

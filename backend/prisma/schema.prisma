@@ -1,0 +1,215 @@
+// TalkPulse AI — Database Schema
+// Supabase PostgreSQL via Prisma ORM
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ----------------------------------------------------
+// 1. User Model
+// ----------------------------------------------------
+model User {
+  id                    String             @id @default(uuid())
+  supabaseAuthId        String?            @unique
+  email                 String             @unique
+  name                  String?
+  avatar                String?
+  nativeLanguage        String             @default("Spanish")
+  targetDialect         String             @default("US English")
+  proficiencyLevel      String             @default("Intermediate (B1-B2)")
+  targetGoal            String             @default("Tech Job Interviews & Professional Fluency")
+  feedbackStrictness    String             @default("Balanced")
+  streakDays            Int                @default(0)
+  dailyGoalMinutes      Int                @default(30)
+  dailyCompletedMinutes Int                @default(0)
+  wordsLearned          Int                @default(0)
+  totalSessions         Int                @default(0)
+  overallFluency        Float              @default(70.0)
+  grammarAccuracy       Float              @default(75.0)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  // Relationships
+  practiceSessions      PracticeSession[]
+  conversations         Conversation[]
+  grammarMistakes       GrammarMistake[]
+  vocabularies          Vocabulary[]
+  learningProgresses    LearningProgress[]
+  learningGoals         LearningGoal[]
+  agentMemories         AgentMemory[]
+
+  @@index([email])
+  @@index([supabaseAuthId])
+}
+
+// ----------------------------------------------------
+// 2. PracticeSession Model
+// ----------------------------------------------------
+model PracticeSession {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic           String
+  type            String   @default("Conversation") // Conversation, Grammar, Interview, Vocabulary
+  durationMinutes Int      @default(15)
+  score           Float    @default(85.0)
+  mistakesLogged  Int      @default(0)
+  status          String   @default("Completed")
+  metadata        Json?    // Detailed scoring, questions, or transcript metadata
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([userId, type])
+}
+
+// ----------------------------------------------------
+// 3. Conversation Model
+// ----------------------------------------------------
+model Conversation {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic     String
+  persona   String?   // e.g., "Tech Interviewer", "Coffee Barista"
+  status    String    @default("ACTIVE") // ACTIVE, ARCHIVED, COMPLETED
+  summary   String?   @db.Text           // Rolling context summary for short-term memory
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  messages  Message[]
+
+  @@index([userId, createdAt])
+  @@index([userId, status])
+}
+
+// ----------------------------------------------------
+// 4. Message Model
+// ----------------------------------------------------
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         String       // "USER", "ASSISTANT", "SYSTEM"
+  content        String       @db.Text
+  corrections    Json?        // Structured feedback [{ original, corrected, rule }]
+  audioUrl       String?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+// ----------------------------------------------------
+// 5. GrammarMistake Model
+// ----------------------------------------------------
+model GrammarMistake {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category       String   // e.g. "Past Simple & Irregular Verbs", "Preposition Selection"
+  originalText   String   @db.Text
+  correctedText  String   @db.Text
+  explanation    String   @db.Text
+  examples       Json?    // Array of example sentences demonstrating correct usage
+  frequencyCount Int      @default(1)
+  isMastered     Boolean  @default(false)
+  lastOccurredAt DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, category, isMastered])
+  @@index([userId, frequencyCount])
+}
+
+// ----------------------------------------------------
+// 6. Vocabulary Model
+// ----------------------------------------------------
+model Vocabulary {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  word           String
+  phonetic       String?
+  partOfSpeech   String    @default("Adjective")
+  definition     String    @db.Text
+  example        String    @db.Text
+  category       String    @default("General") // Business, Communication, Interview, Technical
+  status         String    @default("Learning") // Learning, Reviewing, Mastered
+  level          String    @default("B2")       // B1, B2, C1, C2
+  masteryScore   Int       @default(0)          // 0 to 100 for Spaced Repetition (SRS)
+  lastReviewedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Prevent duplicate vocabulary items for the same user
+  @@unique([userId, word])
+  @@index([userId, status])
+  @@index([userId, category])
+}
+
+// ----------------------------------------------------
+// 7. LearningProgress Model
+// ----------------------------------------------------
+model LearningProgress {
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date              DateTime @db.Date
+  fluencyScore      Float
+  accuracyScore     Float
+  vocabularyScore   Float    @default(0.0)
+  minutesPracticed  Int      @default(0)
+  sessionsCompleted Int      @default(1)
+  mistakesCount     Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Exactly one aggregated progress row per user per calendar day
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+// ----------------------------------------------------
+// 8. LearningGoal Model
+// ----------------------------------------------------
+model LearningGoal {
+  id                  String    @id @default(uuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title               String
+  targetDate          DateTime?
+  dailyMinutesTarget  Int       @default(30)
+  weeklySessionsTarget Int      @default(5)
+  targetProficiency   String?
+  isCompleted         Boolean   @default(false)
+  notes               String?   @db.Text
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([userId, isCompleted])
+}
+
+// ----------------------------------------------------
+// 9. AgentMemory Model
+// ----------------------------------------------------
+model AgentMemory {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memoryType     String    // "OBSERVATION", "WEAKNESS", "PREFERENCE", "TOPIC_INTEREST"
+  key            String    // e.g. "weakness_irregular_past", "prefers_star_format"
+  value          Json      // Structured memory context payload
+  importance     Int       @default(1) // 1-5 priority weighting for context injection
+  lastAccessedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userId, memoryType, key])
+  @@index([userId, memoryType])
+  @@index([userId, importance])
+}

@@ -1,10 +1,10 @@
 import { listVocabulary, addVocabularyWord } from '../services/vocabularyService.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
-export const getVocabulary = (req, res, next) => {
+export const getVocabulary = async (req, res, next) => {
   try {
     const { search, category, status } = req.query;
-    const items = listVocabulary({ search, category, status });
+    const items = await listVocabulary(req.user.id, { search, category, status });
 
     return sendSuccess(res, {
       statusCode: 200,
@@ -21,9 +21,9 @@ export const getVocabulary = (req, res, next) => {
   }
 };
 
-export const createVocabulary = (req, res, next) => {
+export const createVocabulary = async (req, res, next) => {
   try {
-    const item = addVocabularyWord(req.body);
+    const item = await addVocabularyWord(req.user.id, req.body);
     return sendSuccess(res, {
       statusCode: 201,
       message: `Word "${item.word}" added to vocabulary vault`,

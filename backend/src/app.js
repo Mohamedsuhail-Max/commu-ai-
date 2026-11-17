@@ -5,6 +5,7 @@ import { config } from './config/env.js';
 import { apiRateLimiter } from './middleware/rateLimiter.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { notFound } from './middleware/notFound.js';
+import { authContext } from './middleware/authContext.js';
 import apiRouter from './routes/index.js';
 
 const app = express();
@@ -38,7 +39,10 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 // 4. Rate Limiter on all /api routes
 app.use('/api', apiRateLimiter);
 
-// 5. Mount API Routes
+// 5. User Context & Auth Middleware
+app.use('/api', authContext);
+
+// 6. Mount API Routes
 app.use('/api', apiRouter);
 
 // 6. Root greeting

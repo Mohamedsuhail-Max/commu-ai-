@@ -1,9 +1,9 @@
 import { evaluateInterviewAnswer } from '../services/interviewService.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
-export const handleInterviewSession = (req, res, next) => {
+export const handleInterviewSession = async (req, res, next) => {
   try {
-    const feedback = evaluateInterviewAnswer(req.body);
+    const feedback = await evaluateInterviewAnswer(req.user.id, req.body);
     return sendSuccess(res, {
       statusCode: 201,
       message: 'Interview response evaluated successfully',

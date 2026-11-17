@@ -1,9 +1,9 @@
 import { getWeeklyProgress, getMonthlyProgress } from '../services/progressService.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
-export const getWeekly = (req, res, next) => {
+export const getWeekly = async (req, res, next) => {
   try {
-    const data = getWeeklyProgress();
+    const data = await getWeeklyProgress(req.user.id);
     return sendSuccess(res, {
       statusCode: 200,
       message: 'Weekly progress metrics retrieved successfully',
@@ -14,9 +14,9 @@ export const getWeekly = (req, res, next) => {
   }
 };
 
-export const getMonthly = (req, res, next) => {
+export const getMonthly = async (req, res, next) => {
   try {
-    const data = getMonthlyProgress();
+    const data = await getMonthlyProgress(req.user.id);
     return sendSuccess(res, {
       statusCode: 200,
       message: 'Monthly progress trajectory retrieved successfully',

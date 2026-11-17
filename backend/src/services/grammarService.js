@@ -1,7 +1,5 @@
-/**
- * Grammar Analysis & Correction Service
- * (Will connect to Gemini API Function Calling in subsequent chapters)
- */
+import { prisma, isDatabaseConfigured } from '../config/prisma.js';
+import { logger } from '../utils/logger.js';
 
 export const analyzeGrammar = (sentence) => {
   const text = sentence.trim();
@@ -109,4 +107,49 @@ export const analyzeGrammar = (sentence) => {
     changes: [],
     hasErrors: false,
   };
+};
+
+/**
+ * Persists detected grammar mistake to Supabase PostgreSQL
+ */
+export const recordGrammarMistake = async (userId, analysisResult) => {
+  if (!analysisResult.hasErrors || !isDatabaseConfigured) {
+    return null;
+  }
+
+  try {
+    // Check if an existing mistake in this category exists
+    const existing = await prisma.grammarMistake.findFirst({
+      where: {
+        userId,
+        category: analysisResult.category,
+        originalText: analysisResult.originalText,
+      },
+    });
+
+    if (existing) {
+      return await prisma.grammarMistake.update({
+        where: { id: existing.id },
+        data: {
+          frequencyCount: { increment: 1 },
+          lastOccurredAt: new Date(),
+        },
+      });
+    }
+
+    return await prisma.grammarMistake.create({
+      data: {
+        userId,
+        category: analysisResult.category,
+        originalText: analysisResult.originalText,
+        correctedText: analysisResult.correctedText,
+        explanation: analysisResult.explanation,
+        examples: analysisResult.examples,
+        frequencyCount: 1,
+      },
+    });
+  } catch (err) {
+    logger.error('Error in Prisma recordGrammarMistake:', err.message);
+    return null;
+  }
 };

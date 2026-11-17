@@ -1,9 +1,9 @@
 import { getHealthStatus } from '../services/healthService.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
-export const checkHealth = (req, res, next) => {
+export const checkHealth = async (req, res, next) => {
   try {
-    const health = getHealthStatus();
+    const health = await getHealthStatus();
     return sendSuccess(res, {
       statusCode: 200,
       message: 'Service is healthy and operating normally',

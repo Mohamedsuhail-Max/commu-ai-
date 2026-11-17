@@ -1,7 +1,9 @@
-import { analyzeGrammar } from './grammarService.js';
+import { analyzeGrammar, recordGrammarMistake } from './grammarService.js';
 import { createPracticeSession } from './practiceService.js';
+import { prisma, isDatabaseConfigured } from '../config/prisma.js';
+import { logger } from '../utils/logger.js';
 
-export const processChatMessage = ({ message, topic = 'General Practice', history = [] }) => {
+export const processChatMessage = async (userId, { message, topic = 'General Practice', conversationId = null }) => {
   const userText = message.trim();
   const grammarAnalysis = analyzeGrammar(userText);
 
@@ -22,20 +24,61 @@ export const processChatMessage = ({ message, topic = 'General Practice', histor
   // If grammar errors were detected, add an inline coach tip to the response
   if (grammarAnalysis.hasErrors) {
     coachResponse += `\n\n💡 Coaching tip: Consider saying: "${grammarAnalysis.correctedText}". (${grammarAnalysis.explanation.slice(0, 100)}...)`;
+    // Persist to user's grammar mistake ledger
+    await recordGrammarMistake(userId, grammarAnalysis).catch(() => {});
+  }
+
+  // If database is configured, store conversation and messages
+  let activeConversationId = conversationId;
+  if (isDatabaseConfigured) {
+    try {
+      if (!activeConversationId) {
+        const conv = await prisma.conversation.create({
+          data: {
+            userId,
+            topic,
+            status: 'ACTIVE',
+          },
+        });
+        activeConversationId = conv.id;
+      }
+
+      // 1. Record user message
+      await prisma.message.create({
+        data: {
+          conversationId: activeConversationId,
+          sender: 'USER',
+          content: userText,
+          corrections: grammarAnalysis.hasErrors ? grammarAnalysis.changes : undefined,
+        },
+      });
+
+      // 2. Record AI message
+      await prisma.message.create({
+        data: {
+          conversationId: activeConversationId,
+          sender: 'ASSISTANT',
+          content: coachResponse,
+        },
+      });
+    } catch (err) {
+      logger.error('Error persisting chat conversation:', err.message);
+    }
   }
 
   // Record practice interaction
-  createPracticeSession({
+  await createPracticeSession(userId, {
     topic: `Chat: ${topic}`,
     type: 'Conversation',
     durationMinutes: 5,
     score: grammarAnalysis.hasErrors ? 82 : 95,
     mistakesLogged: grammarAnalysis.hasErrors ? 1 : 0,
-  });
+  }).catch(() => {});
 
   return {
     reply: coachResponse,
     topic,
+    conversationId: activeConversationId,
     corrections: grammarAnalysis.hasErrors ? grammarAnalysis.changes : [],
     grammarSummary: grammarAnalysis.hasErrors
       ? {
